@@ -150,7 +150,7 @@ async def update_weibo_note_comment(note_id: str, comment_item: Dict):
     await WeibostoreFactory.create_store().store_comment(comment_item=save_comment_item)
 
 
-async def update_weibo_note_image(picid: str, pic_content, extension_file_name):
+async def update_weibo_note_image(note_id, picid: str, pic_content, extension_file_name):
     """
     Save weibo note image to local
     Args:
@@ -161,7 +161,7 @@ async def update_weibo_note_image(picid: str, pic_content, extension_file_name):
     Returns:
 
     """
-    await WeiboStoreImage().store_image({"pic_id": picid, "pic_content": pic_content, "extension_file_name": extension_file_name})
+    await WeiboStoreImage().store_image(note_id, {"pic_id": picid, "pic_content": pic_content, "extension_file_name": extension_file_name})
 
 
 async def save_creator(user_id: str, user_info: Dict):

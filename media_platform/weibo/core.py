@@ -257,6 +257,7 @@ class WeiboCrawler(AbstractCrawler):
             utils.logger.info(f"[WeiboCrawler.get_note_images] Crawling image mode is not enabled")
             return
 
+        note_id = mblog.get("id")
         pics: Dict = mblog.get("pics")
         if not pics:
             return
@@ -269,7 +270,7 @@ class WeiboCrawler(AbstractCrawler):
             utils.logger.info(f"[WeiboCrawler.get_note_images] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching image")
             if content != None:
                 extension_file_name = url.split(".")[-1]
-                await weibo_store.update_weibo_note_image(pic["pid"], content, extension_file_name)
+                await weibo_store.update_weibo_note_image(note_id, pic["pid"], content, extension_file_name)
 
     async def get_creators_and_notes(self) -> None:
         """

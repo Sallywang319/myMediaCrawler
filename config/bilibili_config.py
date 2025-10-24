@@ -11,13 +11,13 @@
 # bilili 平台配置
 
 # 每天爬取视频/帖子的数量控制
-MAX_NOTES_PER_DAY = 1
+MAX_NOTES_PER_DAY = 20
 
 # 指定B站视频ID列表
 BILI_SPECIFIED_ID_LIST = [
-    "BV1d54y1g7db",
-    "BV1Sz4y1U77N",
-    "BV14Q4y1n7jz",
+    "BV17W411B7Wi",
+    "BV11J411d7P9",
+    "BV1FD4xzbEqL",
     # ........................
 ]
 
@@ -28,8 +28,8 @@ BILI_CREATOR_ID_LIST = [
 ]
 
 # 指定时间范围
-START_DAY = "2024-01-01"
-END_DAY = "2024-01-01"
+START_DAY = "2025-09-20"
+END_DAY = "2025-10-09"
 
 # 搜索模式
 BILI_SEARCH_MODE = "normal"
@@ -40,7 +40,7 @@ BILI_SEARCH_MODE = "normal"
 BILI_QN = 80
 
 # 是否爬取用户信息
-CREATOR_MODE = True
+CREATOR_MODE = False
 
 # 开始爬取用户信息页码
 START_CONTACTS_PAGE = 1
