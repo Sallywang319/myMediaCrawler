@@ -9,9 +9,9 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 # 基础配置
-PLATFORM = "xhs"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
+PLATFORM = "wb"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
 KEYWORDS = "西贝","罗永浩"  # 关键词搜索配置，以英文逗号分隔
-LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
+LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
 COOKIES = ""
 CRAWLER_TYPE = (
     "search"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
@@ -29,10 +29,10 @@ IP_PROXY_PROVIDER_NAME = "kuaidaili"  # kuaidaili | wandouhttp
 # 设置False会打开一个浏览器
 # 小红书如果一直扫码登录不通过，打开浏览器手动过一下滑动验证码
 # 抖音如果一直提示失败，打开浏览器看下是否扫码登录之后出现了手机号验证，如果出现了手动过一下再试。
-HEADLESS = False
+HEADLESS = True
 
 # 是否保存登录状态
-SAVE_LOGIN_STATE = False
+SAVE_LOGIN_STATE = True
 
 # ==================== CDP (Chrome DevTools Protocol) 配置 ====================
 # 是否启用CDP模式 - 使用用户现有的Chrome/Edge浏览器进行爬取，提供更好的反检测能力
@@ -80,7 +80,7 @@ MAX_CONCURRENCY_NUM = 1
 ENABLE_GET_MEIDAS = True
 
 # 是否开启爬评论模式, 默认开启爬评论
-ENABLE_GET_COMMENTS = False
+ENABLE_GET_COMMENTS = True
 
 # 爬取一级评论的数量控制(单视频/帖子)
 CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 10
@@ -115,3 +115,4 @@ from .ks_config import *
 from .weibo_config import *
 from .tieba_config import *
 from .zhihu_config import *
+from .ai_agent_config import *
