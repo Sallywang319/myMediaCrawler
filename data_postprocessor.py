@@ -16,7 +16,9 @@ from typing import Dict, List, Optional
 
 import config
 from ai_agent import LLMAgent
+from media_platform.weibo import WeiboCrawler
 from tools import utils
+from cookies import WB_cookie
 
 
 class DataPostProcessor:
@@ -55,8 +57,8 @@ class DataPostProcessor:
                 self.convert_ids_to_string(item)
         elif isinstance(data, dict):
             # 转换各种ID字段
-            id_fields = ['note_id', 'comment_id', 'user_id', 'video_id', 
-                        'content_id', 'url', 'content_url']
+            id_fields = ['note_id', 'comment_id', 'user_id', 'video_id',
+                         'content_id', 'url', 'content_url']
             for field in id_fields:
                 if field in data and data[field] is not None:
                     data[field] = str(data[field])
@@ -64,15 +66,15 @@ class DataPostProcessor:
     async def load_all_platform_data(self) -> Dict[str, List[Dict]]:
         """一次性加载所有平台的数据"""
         utils.logger.info("[DataPostProcessor] 开始加载所有平台的数据...")
-        
+
         weibo_data = await self._load_weibo_data()
         bilibili_data = await self._load_bilibili_data()
         zhihu_data = await self._load_zhihu_data()
-        
+
         utils.logger.info(
             f"[DataPostProcessor] 数据加载完成 - 微博: {len(weibo_data)}, "
             f"B站: {len(bilibili_data)}, 知乎: {len(zhihu_data)}")
-        
+
         return {
             "weibo": weibo_data,
             "bilibili": bilibili_data,
@@ -298,6 +300,116 @@ class DataPostProcessor:
             f"B站: {len(relevant_bilibili_ids)}/{len(all_data['bilibili'])}, "
             f"知乎: {len(relevant_zhihu_ids)}/{len(all_data['zhihu'])}")
 
+    async def get_weibo_detail_content(self):
+        """
+        对相关的微博使用detail模式获取完整内容，并更新缓存数据
+        """
+        if not self.relevant_ids["weibo"]:
+            utils.logger.info("[DataPostProcessor] 没有相关的微博数据，跳过detail模式获取")
+            return
+
+        utils.logger.info(
+            f"[DataPostProcessor] 开始对 {len(self.relevant_ids['weibo'])} 个相关微博使用detail模式获取完整内容...")
+
+        # 保存原始配置
+        original_platform = config.PLATFORM
+        original_cookies = config.COOKIES
+        original_crawler_type = config.CRAWLER_TYPE
+        original_headless = config.HEADLESS
+        original_enable_comments = config.ENABLE_GET_COMMENTS
+        original_weibo_specified_id_list = getattr(
+            config, 'WEIBO_SPECIFIED_ID_LIST', [])[:]
+
+        try:
+            # 设置微博配置为detail模式
+            config.PLATFORM = "wb"
+            config.COOKIES = WB_cookie
+            config.CRAWLER_TYPE = "detail"
+            config.WEIBO_SPECIFIED_ID_LIST = self.relevant_ids["weibo"]
+            config.HEADLESS = True
+            config.ENABLE_GET_COMMENTS = True
+
+            # 使用detail模式再次爬取
+            weibo_crawler_detail = WeiboCrawler()
+            await weibo_crawler_detail.start()
+            utils.logger.info("[DataPostProcessor] 微博detail模式爬取完成，已获取完整内容")
+
+            # 从detail模式的结果中读取完整内容，更新缓存数据
+            await self._update_weibo_content_from_detail()
+
+        finally:
+            # 恢复原始配置
+            config.PLATFORM = original_platform
+            config.COOKIES = original_cookies
+            config.CRAWLER_TYPE = original_crawler_type
+            config.HEADLESS = original_headless
+            config.ENABLE_GET_COMMENTS = original_enable_comments
+            if hasattr(config, 'WEIBO_SPECIFIED_ID_LIST'):
+                config.WEIBO_SPECIFIED_ID_LIST[:] = original_weibo_specified_id_list
+
+    async def _update_weibo_content_from_detail(self):
+        """
+        从detail模式的结果中读取完整内容，更新缓存数据中的content字段
+        """
+        utils.logger.info("[DataPostProcessor] 开始更新微博完整内容...")
+
+        updated_count = 0
+        json_dir = Path("data/weibo/json")
+
+        if not json_dir.exists():
+            utils.logger.warning("[DataPostProcessor] 微博JSON目录不存在，跳过内容更新")
+            return
+
+        # 查找detail模式生成的文件
+        detail_files = list(json_dir.glob("detail_contents_*.json"))
+
+        if not detail_files:
+            utils.logger.warning("[DataPostProcessor] 未找到detail模式生成的文件，跳过内容更新")
+            return
+
+        for detail_file in detail_files:
+            try:
+                with open(detail_file, 'r', encoding='utf-8') as f:
+                    detail_data = json.load(f)
+
+                # 统一ID为字符串
+                self.convert_ids_to_string(detail_data)
+
+                # 处理可能是dict格式的数据
+                if isinstance(detail_data, dict):
+                    for key, value in detail_data.items():
+                        if isinstance(value, list) and value:
+                            detail_data = value
+                            break
+
+                if isinstance(detail_data, list):
+                    for detail_item in detail_data:
+                        note_id = detail_item.get("note_id")
+                        content = detail_item.get("content", "")
+
+                        if note_id and content:
+                            note_id_str = str(note_id)
+                            # 更新缓存数据中的content
+                            if note_id_str in self._cached_data["weibo"]:
+                                original_content = self._cached_data["weibo"][note_id_str].get(
+                                    "content", "")
+                                if content != original_content:
+                                    self._cached_data["weibo"][note_id_str]["content"] = content
+                                    updated_count += 1
+                                    utils.logger.debug(
+                                        f"[DataPostProcessor] 已更新微博 {note_id_str} 的完整内容")
+
+                utils.logger.info(
+                    f"[DataPostProcessor] 从 {detail_file.name} 更新了微博内容")
+
+            except Exception as e:
+                utils.logger.error(
+                    f"[DataPostProcessor] 读取detail文件 {detail_file} 失败: {e}")
+                continue
+
+        utils.logger.info(
+            f"[DataPostProcessor] 微博内容更新完成，共更新 {updated_count} 条微博的完整内容")
+
     def load_comments(self) -> Dict[str, Dict[str, List[Dict]]]:
         """
         加载所有评论文件
@@ -317,23 +429,24 @@ class DataPostProcessor:
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
-                    
+
                     # 统一ID为字符串
                     self.convert_ids_to_string(comments)
-                    
+
                     # 处理可能是dict格式的数据
                     if isinstance(comments, dict):
                         for key, value in comments.items():
                             if isinstance(value, list) and value:
                                 comments = value
                                 break
-                    
+
                     if isinstance(comments, list):
                         for comment in comments:
                             note_id = comment.get("note_id")
                             if note_id:
-                                comments_data["weibo"][str(note_id)].append(comment)
-                    
+                                comments_data["weibo"][str(
+                                    note_id)].append(comment)
+
                     utils.logger.info(
                         f"[DataPostProcessor] 从 {comments_file.name} 加载了评论")
                 except Exception as e:
@@ -347,21 +460,23 @@ class DataPostProcessor:
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
-                    
+
                     self.convert_ids_to_string(comments)
-                    
+
                     if isinstance(comments, dict):
                         for key, value in comments.items():
                             if isinstance(value, list) and value:
                                 comments = value
                                 break
-                    
+
                     if isinstance(comments, list):
                         for comment in comments:
-                            video_id = comment.get("video_id") or comment.get("bvid")
+                            video_id = comment.get(
+                                "video_id") or comment.get("bvid")
                             if video_id:
-                                comments_data["bilibili"][str(video_id)].append(comment)
-                    
+                                comments_data["bilibili"][str(
+                                    video_id)].append(comment)
+
                     utils.logger.info(
                         f"[DataPostProcessor] 从 {comments_file.name} 加载了评论")
                 except Exception as e:
@@ -375,42 +490,43 @@ class DataPostProcessor:
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
-                    
+
                     self.convert_ids_to_string(comments)
-                    
+
                     if isinstance(comments, dict):
                         for key, value in comments.items():
                             if isinstance(value, list) and value:
                                 comments = value
                                 break
-                    
+
                     if isinstance(comments, list):
                         for comment in comments:
                             content_id = comment.get("url") or comment.get(
                                 "content_url") or comment.get("content_id")
                             if content_id:
-                                comments_data["zhihu"][str(content_id)].append(comment)
-                    
+                                comments_data["zhihu"][str(
+                                    content_id)].append(comment)
+
                     utils.logger.info(
                         f"[DataPostProcessor] 从 {comments_file.name} 加载了评论")
                 except Exception as e:
                     utils.logger.error(
                         f"[DataPostProcessor] 读取评论文件 {comments_file} 失败: {e}")
 
-        total_comments = sum(len(comments) for platform_comments in comments_data.values() 
-                           for comments in platform_comments.values())
+        total_comments = sum(len(comments) for platform_comments in comments_data.values()
+                             for comments in platform_comments.values())
         utils.logger.info(
             f"[DataPostProcessor] 评论加载完成，共加载 {total_comments} 条评论")
-        
+
         return comments_data
 
-    def merge_comments_to_data(self, all_data: Dict[str, List[Dict]], 
+    def merge_comments_to_data(self, all_data: Dict[str, List[Dict]],
                                comments_data: Dict[str, Dict[str, List[Dict]]]):
         """
         将评论集成到原始数据中
         """
         utils.logger.info("[DataPostProcessor] 开始集成评论到原始数据...")
-        
+
         # 为微博数据添加评论
         for item in all_data["weibo"]:
             note_id = str(item.get("note_id", ""))
@@ -429,16 +545,20 @@ class DataPostProcessor:
 
         # 为知乎数据添加评论
         for item in all_data["zhihu"]:
-            content_id = str(item.get("url") or item.get("content_url") or item.get("content_id", ""))
+            content_id = str(item.get("url") or item.get(
+                "content_url") or item.get("content_id", ""))
             if content_id in comments_data["zhihu"]:
                 item["comments"] = comments_data["zhihu"][content_id]
             else:
                 item["comments"] = []
 
-        weibo_with_comments = sum(1 for item in all_data["weibo"] if item.get("comments"))
-        bilibili_with_comments = sum(1 for item in all_data["bilibili"] if item.get("comments"))
-        zhihu_with_comments = sum(1 for item in all_data["zhihu"] if item.get("comments"))
-        
+        weibo_with_comments = sum(
+            1 for item in all_data["weibo"] if item.get("comments"))
+        bilibili_with_comments = sum(
+            1 for item in all_data["bilibili"] if item.get("comments"))
+        zhihu_with_comments = sum(
+            1 for item in all_data["zhihu"] if item.get("comments"))
+
         utils.logger.info(
             f"[DataPostProcessor] 评论集成完成 - 微博: {weibo_with_comments}, "
             f"B站: {bilibili_with_comments}, 知乎: {zhihu_with_comments}")
@@ -471,7 +591,8 @@ class DataPostProcessor:
                 if unique_key not in seen_ids:
                     seen_ids.add(unique_key)
                     if video_id in self._cached_data["bilibili"]:
-                        video_data = self._cached_data["bilibili"][video_id].copy()
+                        video_data = self._cached_data["bilibili"][video_id].copy(
+                        )
                         video_data["platform"] = "bilibili"
                         video_data["relevance_id"] = video_id
                         all_relevant_data.append(video_data)
@@ -482,7 +603,8 @@ class DataPostProcessor:
                 if unique_key not in seen_ids:
                     seen_ids.add(unique_key)
                     if content_id in self._cached_data["zhihu"]:
-                        zhihu_data = self._cached_data["zhihu"][content_id].copy()
+                        zhihu_data = self._cached_data["zhihu"][content_id].copy(
+                        )
                         zhihu_data["platform"] = "zhihu"
                         zhihu_data["relevance_id"] = content_id
                         all_relevant_data.append(zhihu_data)
@@ -532,13 +654,16 @@ class DataPostProcessor:
         # 第二步：相关性判断
         await self.judge_relevance(all_data)
 
-        # 第三步：加载评论数据
+        # 第三步：对相关的微博使用detail模式获取完整内容
+        await self.get_weibo_detail_content()
+
+        # 第四步：加载评论数据
         comments_data = self.load_comments()
 
-        # 第四步：将评论集成到原始数据中
+        # 第五步：将评论集成到原始数据中
         self.merge_comments_to_data(all_data, comments_data)
 
-        # 第五步：保存相关数据（只保存相关的数据）
+        # 第六步：保存相关数据（只保存相关的数据）
         await self.save_relevant_data(all_data)
 
         utils.logger.info("[DataPostProcessor] 数据后处理流程完成")
@@ -565,10 +690,36 @@ async def main():
     # 创建数据后处理器
     processor = DataPostProcessor(event_description)
 
-    # 执行后处理
-    await processor.process()
+    try:
+        # 执行后处理
+        await processor.process()
+    finally:
+        # 清理所有待处理的任务
+        await _cleanup_tasks()
+
+
+async def _cleanup_tasks():
+    """
+    清理所有待处理的异步任务
+    """
+    try:
+        # 获取当前事件循环中所有待处理的任务
+        loop = asyncio.get_running_loop()
+        current_task = asyncio.current_task()
+        tasks = [task for task in asyncio.all_tasks(loop)
+                 if not task.done() and task != current_task]
+
+        if tasks:
+            utils.logger.info(f"[DataPostProcessor] 清理 {len(tasks)} 个待处理任务...")
+            # 取消所有待处理的任务
+            for task in tasks:
+                task.cancel()
+
+            # 等待所有任务完成取消
+            await asyncio.gather(*tasks, return_exceptions=True)
+    except Exception as e:
+        utils.logger.debug(f"[DataPostProcessor] 清理任务时出错: {e}")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-

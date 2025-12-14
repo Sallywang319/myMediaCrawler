@@ -1,12 +1,12 @@
-# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：  
-# 1. 不得用于任何商业用途。  
-# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。  
-# 3. 不得进行大规模爬取或对平台造成运营干扰。  
-# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。   
+# 声明：本代码仅供学习和研究目的使用。使用者应遵守以下原则：
+# 1. 不得用于任何商业用途。
+# 2. 使用时应遵守目标平台的使用条款和robots.txt规则。
+# 3. 不得进行大规模爬取或对平台造成运营干扰。
+# 4. 应合理控制请求频率，避免给目标平台带来不必要的负担。
 # 5. 不得用于任何非法或不当的用途。
-#   
-# 详细许可条款请参阅项目根目录下的LICENSE文件。  
-# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。  
+#
+# 详细许可条款请参阅项目根目录下的LICENSE文件。
+# 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 
 # -*- coding: utf-8 -*-
@@ -41,8 +41,23 @@ class ExpiringLocalCache(AbstractCache):
         析构函数，清理定时任务
         :return:
         """
-        if self._cron_task is not None:
+        if self._cron_task is not None and not self._cron_task.done():
+            try:
+                self._cron_task.cancel()
+            except Exception:
+                pass
+
+    async def cleanup(self):
+        """
+        清理资源，取消后台任务
+        :return:
+        """
+        if self._cron_task is not None and not self._cron_task.done():
             self._cron_task.cancel()
+            try:
+                await self._cron_task
+            except asyncio.CancelledError:
+                pass
 
     def get(self, key: str) -> Optional[Any]:
         """
@@ -91,14 +106,21 @@ class ExpiringLocalCache(AbstractCache):
         开启定时清理任务,
         :return:
         """
-
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # 如果没有运行中的事件循环，尝试获取或创建
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # 如果事件循环已关闭，不创建任务
+                return
 
-        self._cron_task = loop.create_task(self._start_clear_cron())
+        if loop.is_running():
+            self._cron_task = loop.create_task(self._start_clear_cron())
+        else:
+            # 如果事件循环未运行，不创建任务
+            self._cron_task = None
 
     def _clear(self):
         """
