@@ -18,7 +18,7 @@ import config
 from ai_agent import LLMAgent
 from media_platform.weibo import WeiboCrawler
 from tools import utils
-from cookies import WB_cookie
+from cookies import WB_cookie, BILI_cookie, ZHIHU_cookie
 
 
 class DataPostProcessor:
@@ -317,8 +317,7 @@ class DataPostProcessor:
         original_crawler_type = config.CRAWLER_TYPE
         original_headless = config.HEADLESS
         original_enable_comments = config.ENABLE_GET_COMMENTS
-        original_weibo_specified_id_list = getattr(
-            config, 'WEIBO_SPECIFIED_ID_LIST', [])[:]
+        original_weibo_specified_id_list = config.WEIBO_SPECIFIED_ID_LIST
 
         try:
             # 设置微博配置为detail模式
@@ -345,7 +344,7 @@ class DataPostProcessor:
             config.HEADLESS = original_headless
             config.ENABLE_GET_COMMENTS = original_enable_comments
             if hasattr(config, 'WEIBO_SPECIFIED_ID_LIST'):
-                config.WEIBO_SPECIFIED_ID_LIST[:] = original_weibo_specified_id_list
+                config.WEIBO_SPECIFIED_ID_LIST = original_weibo_specified_id_list
 
     async def _update_weibo_content_from_detail(self):
         """
@@ -373,7 +372,7 @@ class DataPostProcessor:
                     detail_data = json.load(f)
 
                 # 统一ID为字符串
-                self.convert_ids_to_string(detail_data)
+                # self.convert_ids_to_string(detail_data)
 
                 # 处理可能是dict格式的数据
                 if isinstance(detail_data, dict):
@@ -425,7 +424,7 @@ class DataPostProcessor:
         # 加载微博评论
         weibo_comments_dir = Path("data/weibo/json")
         if weibo_comments_dir.exists():
-            for comments_file in weibo_comments_dir.glob("*comments_*.json"):
+            for comments_file in weibo_comments_dir.glob("search_comments_*.json"):
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
@@ -456,7 +455,7 @@ class DataPostProcessor:
         # 加载B站评论（如果有）
         bilibili_comments_dir = Path("data/bilibili/json")
         if bilibili_comments_dir.exists():
-            for comments_file in bilibili_comments_dir.glob("*comments_*.json"):
+            for comments_file in bilibili_comments_dir.glob("search_comments_*.json"):
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
@@ -486,7 +485,7 @@ class DataPostProcessor:
         # 加载知乎评论（如果有）
         zhihu_comments_dir = Path("data/zhihu/json")
         if zhihu_comments_dir.exists():
-            for comments_file in zhihu_comments_dir.glob("*comments_*.json"):
+            for comments_file in zhihu_comments_dir.glob("search_comments_*.json"):
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
@@ -655,7 +654,7 @@ class DataPostProcessor:
         await self.judge_relevance(all_data)
 
         # 第三步：对相关的微博使用detail模式获取完整内容
-        await self.get_weibo_detail_content()
+        # await self.get_weibo_detail_content()
 
         # 第四步：加载评论数据
         comments_data = self.load_comments()

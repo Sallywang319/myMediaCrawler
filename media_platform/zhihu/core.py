@@ -386,26 +386,14 @@ class ZhihuCrawler(AbstractCrawler):
         cookie_str, cookie_dict = utils.convert_cookies(
             await self.browser_context.cookies()
         )
-        # 确保user_agent存在
-        if not hasattr(self, 'user_agent') or not self.user_agent:
-            self.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-        
         zhihu_client_obj = ZhiHuClient(
             proxy=httpx_proxy,
             headers={
                 "accept": "*/*",
-                "accept-encoding": "gzip, deflate, br",
-                "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "accept-language": "zh-CN,zh;q=0.9",
                 "cookie": cookie_str,
-                "origin": "https://www.zhihu.com",
                 "priority": "u=1, i",
-                "referer": "https://www.zhihu.com/",
-                "sec-ch-ua": '"Chromium";v="128", "Google Chrome";v="128", "Not;A=Brand";v="24"',
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"macOS"',
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-origin",
+                "referer": "https://www.zhihu.com/search?q=python&time_interval=a_year&type=content",
                 "user-agent": self.user_agent,
                 "x-api-version": "3.0.91",
                 "x-app-za": "OS=Web",

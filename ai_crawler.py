@@ -173,8 +173,8 @@ class AICrawlerManager:
         # 并行爬取三个平台（只做搜索和存储，不做相关性判断）
         utils.logger.info("[AICrawlerManager] 开始并行爬取所有平台数据...")
         await asyncio.gather(
-            self.crawl_weibo(),
-            self.crawl_bilibili(),
+            # self.crawl_weibo(),
+            # self.crawl_bilibili(),
             self.crawl_zhihu(),
             return_exceptions=True
         )
