@@ -78,13 +78,13 @@ SAVE_DATA_OPTION = "json"  # csv or db or json or sqlite
 USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
 
 # 爬取开始页数 默认从第一页开始
-START_PAGE = 1
+START_PAGE = 2
 
 # 爬取视频/帖子的数量控制
 CRAWLER_MAX_NOTES_COUNT = 15
 
 # 并发爬虫数量控制
-MAX_CONCURRENCY_NUM = 1
+MAX_CONCURRENCY_NUM = 3
 
 # 是否开启爬媒体模式（包含图片或视频资源），默认不开启爬媒体
 ENABLE_GET_MEIDAS = True
