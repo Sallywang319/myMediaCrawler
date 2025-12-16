@@ -152,7 +152,8 @@ class AICrawlerManager:
             await zhihu_crawler.start()
 
             utils.logger.info(
-                "[AICrawlerManager] 知乎搜索和数据保存完成，数据已保存到 data/zhihu/ 目录")
+                "[AICrawlerManager] 知乎搜索和数据保存完成，数据已保存到 data/zhihu/ 目录"
+            )
 
         finally:
             # 恢复原始配置
@@ -173,8 +174,8 @@ class AICrawlerManager:
         # 并行爬取三个平台（只做搜索和存储，不做相关性判断）
         utils.logger.info("[AICrawlerManager] 开始并行爬取所有平台数据...")
         await asyncio.gather(
-            # self.crawl_weibo(),
-            # self.crawl_bilibili(),
+            self.crawl_weibo(),
+            self.crawl_bilibili(),
             self.crawl_zhihu(),
             return_exceptions=True
         )

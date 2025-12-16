@@ -248,4 +248,3 @@ class LLMAgent:
             response.raise_for_status()
             result = response.json()
             return result["choices"][0]["message"]["content"]
-

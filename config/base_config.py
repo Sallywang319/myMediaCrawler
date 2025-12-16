@@ -9,7 +9,6 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 # 基础配置
-from cookies import WB_cookie, ZHIHU_cookie, BILI_cookie
 from .ai_agent_config import *
 from .zhihu_config import *
 from .tieba_config import *
@@ -18,10 +17,12 @@ from .ks_config import *
 from .dy_config import *
 from .xhs_config import *
 from .bilibili_config import *
-PLATFORM = "zhihu"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
-KEYWORDS = "香港宏福苑火灾"  # 关键词搜索配置，以英文逗号分隔
+from cookies import ZHIHU_cookie, WB_cookie, BILI_cookie
+
+PLATFORM = "bili"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
+KEYWORDS = "香港大火"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = ZHIHU_cookie
+COOKIES = BILI_cookie
 CRAWLER_TYPE = (
     "search"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )

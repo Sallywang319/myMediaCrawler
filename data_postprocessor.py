@@ -12,7 +12,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 import config
 from ai_agent import LLMAgent
@@ -24,13 +24,17 @@ from cookies import WB_cookie, BILI_cookie, ZHIHU_cookie
 class DataPostProcessor:
     """数据后处理器"""
 
-    def __init__(self, event_description: str):
+    def __init__(self, event_description: str, target_dates: Optional[List[str]] = None):
         """
         初始化数据后处理器
         Args:
             event_description: 热点事件描述
+            target_dates: 只处理指定日期的爬虫结果文件，格式如 ["2025-12-15", "2025-12-16"]
         """
         self.event_description = event_description
+        # 只处理指定日期的文件；如果为 None 或空列表，则处理所有日期
+        self.target_dates = [d.strip()
+                             for d in target_dates] if target_dates else None
         self.llm_agent = LLMAgent(
             api_key=config.LLM_API_KEY or None,
             base_url=config.LLM_BASE_URL or None,
@@ -47,6 +51,98 @@ class DataPostProcessor:
             "bilibili": [],
             "zhihu": []
         }
+        # 已存在的相关数据（从 data/relevant/relevant_data_latest.json 中加载）
+        self._existing_relevant_data: List[Dict] = []
+        # 已经判定为“相关”的内容ID，用于跳过重复的大模型调用
+        self._existing_relevant_ids: Dict[str, Set[str]] = {
+            "weibo": set(),
+            "bilibili": set(),
+            "zhihu": set()
+        }
+
+        # 初始化时尝试加载已有的相关数据
+        self._load_existing_relevant_data()
+
+    def _load_existing_relevant_data(self):
+        """
+        从 data/relevant/relevant_data_latest.json 中加载
+        已经判定为“相关”的内容及其 ID，用于增量处理。
+        """
+        try:
+            latest_file = Path("data/relevant/relevant_data_latest.json")
+            if not latest_file.exists():
+                utils.logger.info(
+                    "[DataPostProcessor] 未找到已有的 relevant_data_latest.json，"
+                    "将进行完整相关性判断"
+                )
+                return
+
+            with open(latest_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            if not isinstance(data, list):
+                utils.logger.warning(
+                    "[DataPostProcessor] relevant_data_latest.json 内容格式异常，"
+                    "期望为列表，实际为: %s", type(data)
+                )
+                return
+
+            self._existing_relevant_data = data
+
+            loaded_count = 0
+            for item in data:
+                platform = item.get("platform")
+                # 统一用 relevance_id 作为“已处理ID”
+                content_id = (
+                    item.get("relevance_id")
+                    or item.get("note_id")
+                    or item.get("video_id")
+                    or item.get("content_id")
+                    or item.get("url")
+                    or item.get("content_url")
+                )
+                if not platform or not content_id:
+                    continue
+                if platform not in self._existing_relevant_ids:
+                    continue
+                content_id_str = str(content_id)
+                self._existing_relevant_ids[platform].add(content_id_str)
+                loaded_count += 1
+
+            utils.logger.info(
+                "[DataPostProcessor] 已从 relevant_data_latest.json 加载 %d 条已判定为相关的数据，"
+                "将跳过这些内容的重复大模型判断", loaded_count
+            )
+        except Exception as e:
+            utils.logger.error(
+                f"[DataPostProcessor] 加载已有相关数据失败: {e}"
+            )
+
+    def _get_files_by_date(self, json_dir: Path, base_pattern: str) -> List[Path]:
+        """
+        按照 self.target_dates 过滤指定目录下的 JSON 文件。
+        文件命名格式示例：search_contents_2025-12-15.json
+        Args:
+            json_dir: JSON 文件所在目录
+            base_pattern: 基础前缀，如 "search_contents" / "search_comments"
+        """
+        if not json_dir.exists():
+            return []
+
+        files = list(json_dir.glob(f"{base_pattern}_*.json"))
+
+        # 未指定日期时，返回全部匹配文件
+        if not self.target_dates:
+            return sorted(files)
+
+        filtered_files: List[Path] = []
+        for f in files:
+            name = f.name
+            # 只要文件名中包含任一指定日期字符串即可
+            if any(target_date in name for target_date in self.target_dates):
+                filtered_files.append(f)
+
+        return sorted(filtered_files)
 
     def convert_ids_to_string(self, data):
         """
@@ -86,16 +182,18 @@ class DataPostProcessor:
         all_data = []
         try:
             json_dir = Path("data/weibo/json")
-            if json_dir.exists():
-                for json_file in json_dir.glob("search_contents_*.json"):
-                    try:
-                        with open(json_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            if isinstance(data, list):
-                                all_data.extend(data)
-                    except Exception as e:
-                        utils.logger.error(
-                            f"[DataPostProcessor] 读取JSON文件 {json_file} 失败: {e}")
+            for json_file in self._get_files_by_date(json_dir, "search_contents"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            all_data.extend(data)
+                    utils.logger.info(
+                        f"[DataPostProcessor] 从微博文件 {json_file.name} 加载了 {len(data) if isinstance(data, list) else 0} 条数据"
+                    )
+                except Exception as e:
+                    utils.logger.error(
+                        f"[DataPostProcessor] 读取JSON文件 {json_file} 失败: {e}")
 
             # 去重：使用note_id作为唯一标识，并缓存数据
             seen_ids = set()
@@ -121,16 +219,18 @@ class DataPostProcessor:
         all_data = []
         try:
             json_dir = Path("data/bilibili/json")
-            if json_dir.exists():
-                for json_file in json_dir.glob("search_contents_*.json"):
-                    try:
-                        with open(json_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            if isinstance(data, list):
-                                all_data.extend(data)
-                    except Exception as e:
-                        utils.logger.error(
-                            f"[DataPostProcessor] 读取JSON文件 {json_file} 失败: {e}")
+            for json_file in self._get_files_by_date(json_dir, "search_contents"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            all_data.extend(data)
+                    utils.logger.info(
+                        f"[DataPostProcessor] 从B站文件 {json_file.name} 加载了 {len(data) if isinstance(data, list) else 0} 条数据"
+                    )
+                except Exception as e:
+                    utils.logger.error(
+                        f"[DataPostProcessor] 读取JSON文件 {json_file} 失败: {e}")
 
             # 去重：使用video_id作为唯一标识，并缓存数据
             seen_ids = set()
@@ -156,16 +256,18 @@ class DataPostProcessor:
         all_data = []
         try:
             json_dir = Path("data/zhihu/json")
-            if json_dir.exists():
-                for json_file in json_dir.glob("search_contents_*.json"):
-                    try:
-                        with open(json_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                            if isinstance(data, list):
-                                all_data.extend(data)
-                    except Exception as e:
-                        utils.logger.error(
-                            f"[DataPostProcessor] 读取JSON文件 {json_file} 失败: {e}")
+            for json_file in self._get_files_by_date(json_dir, "search_contents"):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            all_data.extend(data)
+                    utils.logger.info(
+                        f"[DataPostProcessor] 从知乎文件 {json_file.name} 加载了 {len(data) if isinstance(data, list) else 0} 条数据"
+                    )
+                except Exception as e:
+                    utils.logger.error(
+                        f"[DataPostProcessor] 读取JSON文件 {json_file} 失败: {e}")
 
             # 去重：使用url/content_url/content_id作为唯一标识，并缓存数据
             seen_ids = set()
@@ -200,6 +302,14 @@ class DataPostProcessor:
                 if not note_id:
                     continue
 
+                note_id_str = str(note_id)
+                # 如果该微博已在历史 relevant_data_latest.json 中被判定为相关，则跳过大模型调用
+                if note_id_str in self._existing_relevant_ids["weibo"]:
+                    utils.logger.debug(
+                        f"[DataPostProcessor] 微博 {note_id_str} 已在历史数据中判定为相关，跳过重复判断"
+                    )
+                    continue
+
                 content = item.get("content", "")
                 relevance = await self.llm_agent.judge_relevance(
                     {"content": content, "note_id": note_id},
@@ -230,6 +340,13 @@ class DataPostProcessor:
             try:
                 video_id = item.get("video_id")
                 if not video_id:
+                    continue
+
+                video_id_str = str(video_id)
+                if video_id_str in self._existing_relevant_ids["bilibili"]:
+                    utils.logger.debug(
+                        f"[DataPostProcessor] B站视频 {video_id_str} 已在历史数据中判定为相关，跳过重复判断"
+                    )
                     continue
 
                 title = item.get("title", "")
@@ -264,6 +381,13 @@ class DataPostProcessor:
                 content_id = item.get("url") or item.get(
                     "content_url") or item.get("content_id")
                 if not content_id:
+                    continue
+
+                content_id_str = str(content_id)
+                if content_id_str in self._existing_relevant_ids["zhihu"]:
+                    utils.logger.debug(
+                        f"[DataPostProcessor] 知乎内容 {content_id_str} 已在历史数据中判定为相关，跳过重复判断"
+                    )
                     continue
 
                 title = item.get("title", "")
@@ -331,7 +455,8 @@ class DataPostProcessor:
             # 使用detail模式再次爬取
             weibo_crawler_detail = WeiboCrawler()
             await weibo_crawler_detail.start()
-            utils.logger.info("[DataPostProcessor] 微博detail模式爬取完成，已获取完整内容")
+            utils.logger.info("[DataPostProcessor] 微博detail模式爬取完成，已获取完整内容"
+                              )
 
             # 从detail模式的结果中读取完整内容，更新缓存数据
             await self._update_weibo_content_from_detail()
@@ -424,7 +549,7 @@ class DataPostProcessor:
         # 加载微博评论
         weibo_comments_dir = Path("data/weibo/json")
         if weibo_comments_dir.exists():
-            for comments_file in weibo_comments_dir.glob("search_comments_*.json"):
+            for comments_file in self._get_files_by_date(weibo_comments_dir, "search_comments"):
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
@@ -455,7 +580,7 @@ class DataPostProcessor:
         # 加载B站评论（如果有）
         bilibili_comments_dir = Path("data/bilibili/json")
         if bilibili_comments_dir.exists():
-            for comments_file in bilibili_comments_dir.glob("search_comments_*.json"):
+            for comments_file in self._get_files_by_date(bilibili_comments_dir, "search_comments"):
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
@@ -485,7 +610,7 @@ class DataPostProcessor:
         # 加载知乎评论（如果有）
         zhihu_comments_dir = Path("data/zhihu/json")
         if zhihu_comments_dir.exists():
-            for comments_file in zhihu_comments_dir.glob("search_comments_*.json"):
+            for comments_file in self._get_files_by_date(zhihu_comments_dir, "search_comments"):
                 try:
                     with open(comments_file, 'r', encoding='utf-8') as f:
                         comments = json.load(f)
@@ -565,48 +690,61 @@ class DataPostProcessor:
     async def save_relevant_data(self, all_data: Dict[str, List[Dict]]):
         """
         将所有平台的相关数据收集并存储到一个JSON文件中，支持去重
+        同时会合并历史 relevant_data_latest.json 中已有的数据，实现增量更新。
         """
         utils.logger.info("[DataPostProcessor] 开始收集并存储所有平台的相关数据...")
 
         try:
-            # 用于去重的集合，使用(platform, id)作为唯一标识
-            seen_ids = set()
-            all_relevant_data = []
+            # 使用 (platform, relevance_id) 作为唯一键，统一合并“历史数据 + 本次新数据”
+            merged_relevant: Dict[tuple, Dict] = {}
+
+            def _add_item(item: Dict):
+                platform = item.get("platform")
+                relevance_id = (
+                    item.get("relevance_id")
+                    or item.get("note_id")
+                    or item.get("video_id")
+                    or item.get("content_id")
+                    or item.get("url")
+                    or item.get("content_url")
+                )
+                if not platform or not relevance_id:
+                    return
+                key = (platform, str(relevance_id))
+                merged_relevant[key] = item
+
+            # 1. 先合并历史 relevant_data_latest.json 中的数据
+            for item in self._existing_relevant_data:
+                # 这里直接使用历史数据中的内容；如果本次有同一条的更新，会在后面覆盖
+                _add_item(item)
+
+            # 2. 再合并本次运行中新增/更新的相关数据（会覆盖同 key 的历史记录）
 
             # 收集微博相关数据
             for note_id in self.relevant_ids["weibo"]:
-                unique_key = ("weibo", note_id)
-                if unique_key not in seen_ids:
-                    seen_ids.add(unique_key)
-                    if note_id in self._cached_data["weibo"]:
-                        note_data = self._cached_data["weibo"][note_id].copy()
-                        note_data["platform"] = "weibo"
-                        note_data["relevance_id"] = note_id
-                        all_relevant_data.append(note_data)
+                if note_id in self._cached_data["weibo"]:
+                    note_data = self._cached_data["weibo"][note_id].copy()
+                    note_data["platform"] = "weibo"
+                    note_data["relevance_id"] = note_id
+                    _add_item(note_data)
 
             # 收集B站相关数据
             for video_id in self.relevant_ids["bilibili"]:
-                unique_key = ("bilibili", video_id)
-                if unique_key not in seen_ids:
-                    seen_ids.add(unique_key)
-                    if video_id in self._cached_data["bilibili"]:
-                        video_data = self._cached_data["bilibili"][video_id].copy(
-                        )
-                        video_data["platform"] = "bilibili"
-                        video_data["relevance_id"] = video_id
-                        all_relevant_data.append(video_data)
+                if video_id in self._cached_data["bilibili"]:
+                    video_data = self._cached_data["bilibili"][video_id].copy()
+                    video_data["platform"] = "bilibili"
+                    video_data["relevance_id"] = video_id
+                    _add_item(video_data)
 
             # 收集知乎相关数据
             for content_id in self.relevant_ids["zhihu"]:
-                unique_key = ("zhihu", content_id)
-                if unique_key not in seen_ids:
-                    seen_ids.add(unique_key)
-                    if content_id in self._cached_data["zhihu"]:
-                        zhihu_data = self._cached_data["zhihu"][content_id].copy(
-                        )
-                        zhihu_data["platform"] = "zhihu"
-                        zhihu_data["relevance_id"] = content_id
-                        all_relevant_data.append(zhihu_data)
+                if content_id in self._cached_data["zhihu"]:
+                    zhihu_data = self._cached_data["zhihu"][content_id].copy()
+                    zhihu_data["platform"] = "zhihu"
+                    zhihu_data["relevance_id"] = content_id
+                    _add_item(zhihu_data)
+
+            all_relevant_data = list(merged_relevant.values())
 
             # 统一ID为字符串
             self.convert_ids_to_string(all_relevant_data)
@@ -654,7 +792,7 @@ class DataPostProcessor:
         await self.judge_relevance(all_data)
 
         # 第三步：对相关的微博使用detail模式获取完整内容
-        # await self.get_weibo_detail_content()
+        await self.get_weibo_detail_content()
 
         # 第四步：加载评论数据
         comments_data = self.load_comments()
@@ -686,8 +824,20 @@ async def main():
             print("示例: python data_postprocessor.py '某热点事件的具体描述'")
             return
 
+    # 通过环境变量控制要处理的日期（可选）
+    # 例如：export TARGET_DATES="2025-12-15,2025-12-16"
+    target_dates_env = os.getenv("TARGET_DATES", "").strip()
+    if target_dates_env:
+        target_dates = [d.strip()
+                        for d in target_dates_env.split(",") if d.strip()]
+        utils.logger.info(
+            f"[DataPostProcessor] 仅处理以下日期的数据文件: {target_dates}"
+        )
+    else:
+        target_dates = None
+
     # 创建数据后处理器
-    processor = DataPostProcessor(event_description)
+    processor = DataPostProcessor(event_description, target_dates=target_dates)
 
     try:
         # 执行后处理

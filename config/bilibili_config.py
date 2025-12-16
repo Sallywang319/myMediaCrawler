@@ -28,8 +28,8 @@ BILI_CREATOR_ID_LIST = [
 ]
 
 # 指定时间范围
-START_DAY = "2025-09-20"
-END_DAY = "2025-10-09"
+START_DAY = "2025-11-26"
+END_DAY = "2025-12-16"
 
 # 搜索模式
 BILI_SEARCH_MODE = "normal"

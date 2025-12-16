@@ -177,6 +177,6 @@ docs/.vitepress/cache
 
 agent_zone
 debug_tools
-cookies.py
+cookies
 
 database/*.db

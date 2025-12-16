@@ -130,7 +130,8 @@ class ZhihuCrawler(AbstractCrawler):
             else:
                 pass
 
-            utils.logger.info("[ZhihuCrawler.start] Zhihu Crawler finished ...")
+            utils.logger.info(
+                "[ZhihuCrawler.start] Zhihu Crawler finished ...")
 
     async def search(self) -> None:
         """Search for notes and retrieve their comment information."""
@@ -149,7 +150,8 @@ class ZhihuCrawler(AbstractCrawler):
                 page - start_page + 1
             ) * zhihu_limit_count <= config.CRAWLER_MAX_NOTES_COUNT:
                 if page < start_page:
-                    utils.logger.info(f"[ZhihuCrawler.search] Skip page {page}")
+                    utils.logger.info(
+                        f"[ZhihuCrawler.search] Skip page {page}")
                     page += 1
                     continue
 
@@ -172,15 +174,17 @@ class ZhihuCrawler(AbstractCrawler):
 
                     # Sleep after page navigation
                     await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                    utils.logger.info(f"[ZhihuCrawler.search] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {page-1}")
-                    
+                    utils.logger.info(
+                        f"[ZhihuCrawler.search] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {page-1}")
+
                     page += 1
                     for content in content_list:
                         await zhihu_store.update_zhihu_content(content)
 
                     await self.batch_get_content_comments(content_list)
                 except DataFetchError:
-                    utils.logger.error("[ZhihuCrawler.search] Search content error")
+                    utils.logger.error(
+                        "[ZhihuCrawler.search] Search content error")
                     return
 
     async def batch_get_content_comments(self, content_list: List[ZhihuContent]):
@@ -223,11 +227,12 @@ class ZhihuCrawler(AbstractCrawler):
             utils.logger.info(
                 f"[ZhihuCrawler.get_comments] Begin get note id comments {content_item.content_id}"
             )
-            
+
             # Sleep before fetching comments
             await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-            utils.logger.info(f"[ZhihuCrawler.get_comments] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds before fetching comments for content {content_item.content_id}")
-            
+            utils.logger.info(
+                f"[ZhihuCrawler.get_comments] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds before fetching comments for content {content_item.content_id}")
+
             await self.zhihu_client.get_note_all_comments(
                 content=content_item,
                 crawl_interval=config.CRAWLER_MAX_SLEEP_SEC,
@@ -314,11 +319,12 @@ class ZhihuCrawler(AbstractCrawler):
                     f"[ZhihuCrawler.get_specified_notes] Get answer info, question_id: {question_id}, answer_id: {answer_id}"
                 )
                 result = await self.zhihu_client.get_answer_info(question_id, answer_id)
-                
+
                 # Sleep after fetching answer details
                 await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                utils.logger.info(f"[ZhihuCrawler.get_note_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching answer details {answer_id}")
-                
+                utils.logger.info(
+                    f"[ZhihuCrawler.get_note_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching answer details {answer_id}")
+
                 return result
 
             elif note_type == constant.ARTICLE_NAME:
@@ -327,11 +333,12 @@ class ZhihuCrawler(AbstractCrawler):
                     f"[ZhihuCrawler.get_specified_notes] Get article info, article_id: {article_id}"
                 )
                 result = await self.zhihu_client.get_article_info(article_id)
-                
+
                 # Sleep after fetching article details
                 await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                utils.logger.info(f"[ZhihuCrawler.get_note_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching article details {article_id}")
-                
+                utils.logger.info(
+                    f"[ZhihuCrawler.get_note_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching article details {article_id}")
+
                 return result
 
             elif note_type == constant.VIDEO_NAME:
@@ -340,11 +347,12 @@ class ZhihuCrawler(AbstractCrawler):
                     f"[ZhihuCrawler.get_specified_notes] Get video info, video_id: {video_id}"
                 )
                 result = await self.zhihu_client.get_video_info(video_id)
-                
+
                 # Sleep after fetching video details
                 await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                utils.logger.info(f"[ZhihuCrawler.get_note_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching video details {video_id}")
-                
+                utils.logger.info(
+                    f"[ZhihuCrawler.get_note_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching video details {video_id}")
+
                 return result
 
     async def get_specified_notes(self):
@@ -372,7 +380,8 @@ class ZhihuCrawler(AbstractCrawler):
                 )
                 continue
 
-            note_detail = cast(ZhihuContent, note_detail)  # only for type check
+            # only for type check
+            note_detail = cast(ZhihuContent, note_detail)
             need_get_comment_notes.append(note_detail)
             await zhihu_store.update_zhihu_content(note_detail)
 
@@ -432,7 +441,8 @@ class ZhihuCrawler(AbstractCrawler):
             )
             return browser_context
         else:
-            browser = await chromium.launch(headless=headless, proxy=playwright_proxy)  # type: ignore
+            # type: ignore
+            browser = await chromium.launch(headless=headless, proxy=playwright_proxy)
             browser_context = await browser.new_context(
                 viewport={"width": 1920, "height": 1080}, user_agent=user_agent
             )
