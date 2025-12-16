@@ -83,7 +83,8 @@ class ZhiHuClient(AbstractApiClient):
             response = await client.request(method, url, timeout=self.timeout, **kwargs)
 
         if response.status_code != 200:
-            utils.logger.error(f"[ZhiHuClient.request] Requset Url: {url}, Request error: {response.text}")
+            utils.logger.error(
+                f"[ZhiHuClient.request] Requset Url: {url}, Request error: {response.text}")
             if response.status_code == 403:
                 raise ForbiddenError(response.text)
             elif response.status_code == 404:  # 如果一个content没有评论也是404
@@ -96,11 +97,13 @@ class ZhiHuClient(AbstractApiClient):
         try:
             data: Dict = response.json()
             if data.get("error"):
-                utils.logger.error(f"[ZhiHuClient.request] Request error: {data}")
+                utils.logger.error(
+                    f"[ZhiHuClient.request] Request error: {data}")
                 raise DataFetchError(data.get("error", {}).get("message"))
             return data
         except json.JSONDecodeError:
-            utils.logger.error(f"[ZhiHuClient.request] Request error: {response.text}")
+            utils.logger.error(
+                f"[ZhiHuClient.request] Request error: {response.text}")
             raise DataFetchError(response.text)
 
     async def get(self, uri: str, params=None, **kwargs) -> Union[Response, Dict, str]:
@@ -117,7 +120,8 @@ class ZhiHuClient(AbstractApiClient):
         if isinstance(params, dict):
             final_uri += '?' + urlencode(params)
         headers = await self._pre_headers(final_uri)
-        base_url = (zhihu_constant.ZHIHU_URL if "/p/" not in uri else zhihu_constant.ZHIHU_ZHUANLAN_URL)
+        base_url = (
+            zhihu_constant.ZHIHU_URL if "/p/" not in uri else zhihu_constant.ZHIHU_ZHUANLAN_URL)
         return await self.request(method="GET", url=base_url + final_uri, headers=headers, **kwargs)
 
     async def pong(self) -> bool:
@@ -134,9 +138,11 @@ class ZhiHuClient(AbstractApiClient):
                 ping_flag = True
                 utils.logger.info("[ZhiHuClient.pong] Ping zhihu successfully")
             else:
-                utils.logger.error(f"[ZhiHuClient.pong] Ping zhihu failed, response data: {res}")
+                utils.logger.error(
+                    f"[ZhiHuClient.pong] Ping zhihu failed, response data: {res}")
         except Exception as e:
-            utils.logger.error(f"[ZhiHuClient.pong] Ping zhihu failed: {e}, and try to login again...")
+            utils.logger.error(
+                f"[ZhiHuClient.pong] Ping zhihu failed: {e}, and try to login again...")
             ping_flag = False
         return ping_flag
 
@@ -201,7 +207,8 @@ class ZhiHuClient(AbstractApiClient):
             "vertical": note_type.value,
         }
         search_res = await self.get(uri, params)
-        utils.logger.info(f"[ZhiHuClient.get_note_by_keyword] Search result: {search_res}")
+        utils.logger.info(
+            f"[ZhiHuClient.get_note_by_keyword] Search result: {search_res}")
         return self._extractor.extract_contents_from_search(search_res)
 
     async def get_root_comments(
@@ -288,7 +295,8 @@ class ZhiHuClient(AbstractApiClient):
             paging_info = root_comment_res.get("paging", {})
             is_end = paging_info.get("is_end")
             offset = self._extractor.extract_offset(paging_info)
-            comments = self._extractor.extract_comments(content, root_comment_res.get("data"))
+            comments = self._extractor.extract_comments(
+                content, root_comment_res.get("data"))
 
             if not comments:
                 break
@@ -337,7 +345,8 @@ class ZhiHuClient(AbstractApiClient):
                 paging_info = child_comment_res.get("paging", {})
                 is_end = paging_info.get("is_end")
                 offset = self._extractor.extract_offset(paging_info)
-                sub_comments = self._extractor.extract_comments(content, child_comment_res.get("data"))
+                sub_comments = self._extractor.extract_comments(
+                    content, child_comment_res.get("data"))
 
                 if not sub_comments:
                     break
@@ -444,10 +453,12 @@ class ZhiHuClient(AbstractApiClient):
             res = await self.get_creator_answers(creator.url_token, offset, limit)
             if not res:
                 break
-            utils.logger.info(f"[ZhiHuClient.get_all_anwser_by_creator] Get creator {creator.url_token} answers: {res}")
+            utils.logger.info(
+                f"[ZhiHuClient.get_all_anwser_by_creator] Get creator {creator.url_token} answers: {res}")
             paging_info = res.get("paging", {})
             is_end = paging_info.get("is_end")
-            contents = self._extractor.extract_content_list_from_creator(res.get("data"))
+            contents = self._extractor.extract_content_list_from_creator(
+                res.get("data"))
             if callback:
                 await callback(contents)
             all_contents.extend(contents)
@@ -481,7 +492,8 @@ class ZhiHuClient(AbstractApiClient):
                 break
             paging_info = res.get("paging", {})
             is_end = paging_info.get("is_end")
-            contents = self._extractor.extract_content_list_from_creator(res.get("data"))
+            contents = self._extractor.extract_content_list_from_creator(
+                res.get("data"))
             if callback:
                 await callback(contents)
             all_contents.extend(contents)
@@ -515,7 +527,8 @@ class ZhiHuClient(AbstractApiClient):
                 break
             paging_info = res.get("paging", {})
             is_end = paging_info.get("is_end")
-            contents = self._extractor.extract_content_list_from_creator(res.get("data"))
+            contents = self._extractor.extract_content_list_from_creator(
+                res.get("data"))
             if callback:
                 await callback(contents)
             all_contents.extend(contents)

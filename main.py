@@ -79,6 +79,17 @@ def cleanup():
         pass
     if config.SAVE_DATA_OPTION in ["db", "sqlite"]:
         asyncio.run(db.close())
+    
+    # 取消所有待处理的任务以避免 asyncio 错误
+    try:
+        loop = asyncio.get_event_loop()
+        if not loop.is_closed():
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    except RuntimeError:
+        pass
 
 
 if __name__ == "__main__":

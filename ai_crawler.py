@@ -144,7 +144,7 @@ class AICrawlerManager:
             config.COOKIES = ZHIHU_cookie
             config.CRAWLER_TYPE = "search"
             config.HEADLESS = True
-            # config.ENABLE_GET_COMMENTS = False
+            config.ENABLE_GET_COMMENTS = False
 
             # 使用ZhihuCrawler进行搜索和数据保存
             utils.logger.info("[AICrawlerManager] 使用ZhihuCrawler进行搜索和数据保存...")

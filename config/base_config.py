@@ -9,12 +9,20 @@
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
 # 基础配置
+from .ai_agent_config import *
+from .zhihu_config import *
+from .tieba_config import *
+from .weibo_config import *
+from .ks_config import *
+from .dy_config import *
+from .xhs_config import *
+from .bilibili_config import *
 from cookies import ZHIHU_cookie, WB_cookie, BILI_cookie
 
-PLATFORM = "wb"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
-KEYWORDS = "香港宏福苑"  # 关键词搜索配置，以英文逗号分隔
+PLATFORM = "bili"  # 平台，xhs | dy | ks | bili | wb | tieba | zhihu
+KEYWORDS = "香港大火"  # 关键词搜索配置，以英文逗号分隔
 LOGIN_TYPE = "cookie"  # qrcode or phone or cookie
-COOKIES = WB_cookie
+COOKIES = BILI_cookie
 CRAWLER_TYPE = (
     "search"  # 爬取类型，search(关键词搜索) | detail(帖子详情)| creator(创作者主页数据)
 )
@@ -34,7 +42,7 @@ IP_PROXY_PROVIDER_NAME = "kuaidaili"  # kuaidaili | wandouhttp
 HEADLESS = True
 
 # 是否保存登录状态
-SAVE_LOGIN_STATE = True
+SAVE_LOGIN_STATE = False
 
 # ==================== CDP (Chrome DevTools Protocol) 配置 ====================
 # 是否启用CDP模式 - 使用用户现有的Chrome/Edge浏览器进行爬取，提供更好的反检测能力
@@ -70,7 +78,7 @@ SAVE_DATA_OPTION = "json"  # csv or db or json or sqlite
 USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
 
 # 爬取开始页数 默认从第一页开始
-START_PAGE = 3
+START_PAGE = 1
 
 # 爬取视频/帖子的数量控制
 CRAWLER_MAX_NOTES_COUNT = 15
@@ -109,12 +117,3 @@ FONT_PATH = "./docs/STZHONGS.TTF"
 
 # 爬取间隔时间
 CRAWLER_MAX_SLEEP_SEC = 2
-
-from .bilibili_config import *
-from .xhs_config import *
-from .dy_config import *
-from .ks_config import *
-from .weibo_config import *
-from .tieba_config import *
-from .zhihu_config import *
-from .ai_agent_config import *
